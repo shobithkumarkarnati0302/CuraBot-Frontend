@@ -67,7 +67,6 @@ export interface AppointmentData {
 }
 
 // Enhanced data service with real-time synchronization
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Event emitter for data changes
 class DataChangeNotifier {
@@ -101,7 +100,7 @@ class DataChangeNotifier {
 const dataChangeNotifier = new DataChangeNotifier();
 
 class DataService {
-  private API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend-production.up.railway.app/api';
+  private API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
 
   // Helper function to get auth headers
   private getAuthHeaders() {
