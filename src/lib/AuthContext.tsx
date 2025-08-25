@@ -161,7 +161,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 4. Add types to all function parameters
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api'}/auth/login`, { email, password });
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/login`, { email, password });
       const { token: newToken, user: userData } = response.data;
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -175,7 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (name: string, email: string, password: string, role: string) => {
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api'}/auth/register`, { name, email, password, role });
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/register`, { name, email, password, role });
       const { token: newToken, user: userData } = response.data;
       localStorage.setItem('token', newToken);
       setToken(newToken);
