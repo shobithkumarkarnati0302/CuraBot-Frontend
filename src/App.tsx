@@ -1,14 +1,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
-import { ChatBot } from './components/ChatBot';
+import { ChatBot } from './components/ChatBot.tsx';
 import { Home } from './pages/Home';
 import { Appointments } from './pages/Appointments';
 import { Doctors } from './pages/Doctors';
 import { Services } from './pages/Services';
 import { ServiceDetail } from './pages/ServiceDetail';
 import { Contact } from './pages/Contact';
-import { LabRecords } from './pages/LabRecords';
+import { Reports } from './pages/Reports';
 import { DoctorDashboard } from './pages/DoctorDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AuthProvider, useAuth } from './lib/AuthContext';
@@ -67,7 +67,7 @@ const AppContent = () => {
     (!isAuthenticated || (isAuthenticated && user?.role === 'patient'));
   
   return (
-    <div className="min-h-screen bg-warm-bg">
+    <div className="min-h-screen bg-warm-bg relative">
       {showPatientNavbar && <Navbar />}
       <main className="w-full overflow-x-hidden">
             <Routes>
@@ -191,10 +191,11 @@ const AppContent = () => {
               <Route path="/services" element={<Services />} />
               <Route path="/services/:servicename" element={<ServiceDetail />} />
               <Route path="/contact" element={<Contact />} />
-              <Route path="/lab-records" element={<LabRecords />} />
+              <Route path="/reports" element={<Reports />} />
             </Routes>
           </main>
-          {showPatientNavbar && <ChatBot />}
+        {/* ChatBot should appear on all pages */}
+        <ChatBot />
         </div>
   );
 };

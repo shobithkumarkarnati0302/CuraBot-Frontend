@@ -100,7 +100,7 @@ class DataChangeNotifier {
 const dataChangeNotifier = new DataChangeNotifier();
 
 class DataService {
-  private API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api';
+  private API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
   // Helper function to get auth headers
   private getAuthHeaders() {

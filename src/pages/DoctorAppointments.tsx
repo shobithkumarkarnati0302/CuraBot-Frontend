@@ -67,7 +67,15 @@ export const DoctorAppointments: React.FC = () => {
 
   const handleStatusToggle = async (appointmentId: string, currentCompleted: boolean) => {
     try {
+      console.log('=== APPOINTMENT STATUS UPDATE ===');
+      console.log('Appointment ID:', appointmentId);
+      console.log('Current completed status:', currentCompleted);
+      console.log('User info:', user);
+      
       const updatedStatus = currentCompleted ? 'confirmed' : 'completed';
+      console.log('New status:', updatedStatus);
+      console.log('New completed:', !currentCompleted);
+      
       await dataService.updateAppointmentStatus(appointmentId, updatedStatus, !currentCompleted);
       
       setAppointments(prev => prev.map(apt => 
@@ -82,12 +90,20 @@ export const DoctorAppointments: React.FC = () => {
       });
       
       setTimeout(() => setMessage(null), 3000);
-    } catch (error) {
-      console.error('Error updating appointment status:', error);
-      setMessage({ type: 'error', text: 'Failed to update appointment status' });
-      setTimeout(() => setMessage(null), 3000);
+    } catch (error: any) {
+      console.error('=== APPOINTMENT UPDATE ERROR ===');
+      console.error('Full error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
+      setMessage({ 
+        type: 'error', 
+        text: `Failed to update appointment status: ${error.message || 'Unknown error'}` 
+      });
+      setTimeout(() => setMessage(null), 5000);
     }
   };
+
 
   const filteredAppointments = appointments.filter(appointment => {
     const patientName = (appointment as any).fullName || appointment.patientName || '';
@@ -261,6 +277,7 @@ export const DoctorAppointments: React.FC = () => {
                           {appointment.completed ? 'Completed' : 'Mark Complete'}
                         </span>
                       </button>
+                      
                     </div>
                   </div>
                 </div>
@@ -269,6 +286,7 @@ export const DoctorAppointments: React.FC = () => {
           )}
         </div>
       </div>
+
     </DoctorLayout>
   );
 };

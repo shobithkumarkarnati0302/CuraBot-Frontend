@@ -167,7 +167,7 @@ export const Navbar = () => {
     { to: "/appointments", label: "Appointments", icon: <Calendar className="h-5 w-5" /> },
     { to: "/doctors", label: "Doctors", icon: <UserPlus className="h-5 w-5" /> },
     { to: "/services", label: "Services", icon: <Stethoscope className="h-5 w-5" /> },
-    { to: "/lab-records", label: "Lab Records", icon: <FileText className="h-5 w-5" /> },
+    { to: "/reports", label: "Reports", icon: <FileText className="h-5 w-5" /> },
     { to: "/contact", label: "Contact", icon: <Phone className="h-5 w-5" /> }
   ];
 

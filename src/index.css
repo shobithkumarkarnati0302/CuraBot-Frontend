@@ -71,3 +71,12 @@
 html, body {
   overscroll-behavior-y: contain;
 }
+
+/* ChatBot positioning fix */
+.chatbot-container {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+}

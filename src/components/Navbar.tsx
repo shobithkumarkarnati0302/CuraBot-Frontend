@@ -35,10 +35,10 @@ export const Navbar: React.FC = () => {
       description: "Explore our services"
     },
     { 
-      to: "/lab-records", 
-      label: "Lab Records",
+      to: "/reports", 
+      label: "Reports",
       icon: <FileText className="h-4 w-4" />,
-      description: "Access your results"
+      description: "View your medical reports"
     },
     { 
       to: "/contact", 
