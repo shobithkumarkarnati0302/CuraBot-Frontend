@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { AdminLayout } from '../layouts/AdminLayout';
-import { FileText, Eye, Download, Filter, Search, TrendingUp, Calendar, User, X } from 'lucide-react';
+import { FileText, Eye, Download, Filter, Search, TrendingUp, Calendar, User } from 'lucide-react';
 import { dataService, Report, LabRecord } from '../services/dataService';
 import { useAuth } from '../lib/AuthContext';
-import { config } from '../config/environment';
 
 export function AdminRecords() {
   const { user } = useAuth();
@@ -12,7 +11,6 @@ export function AdminRecords() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'reports' | 'lab-records'>('reports');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRecord, setSelectedRecord] = useState<Report | LabRecord | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -27,7 +25,7 @@ export function AdminRecords() {
       
       // First, let's test the simple endpoint
       try {
-        const testResponse = await fetch(`${config.API_BASE_URL}/reports/test`);
+        const testResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'production' ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api')}/reports/test`);
         const testData = await testResponse.json();
         console.log('AdminRecords: Test endpoint response:', testData);
       } catch (testError) {
@@ -65,8 +63,7 @@ export function AdminRecords() {
 
   return (
     <AdminLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-6">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
@@ -223,10 +220,7 @@ export function AdminRecords() {
                             {new Date(report.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button 
-                              onClick={() => setSelectedRecord(report)}
-                              className="text-emerald-600 hover:text-emerald-900 mr-3 flex items-center"
-                            >
+                            <button className="text-emerald-600 hover:text-emerald-900 mr-3 flex items-center">
                               <Eye className="h-4 w-4 mr-1" />
                               View
                             </button>
@@ -290,10 +284,7 @@ export function AdminRecords() {
                             {new Date(record.testDate).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button 
-                              onClick={() => setSelectedRecord(record)}
-                              className="text-emerald-600 hover:text-emerald-900 mr-3 flex items-center"
-                            >
+                            <button className="text-emerald-600 hover:text-emerald-900 mr-3 flex items-center">
                               <Eye className="h-4 w-4 mr-1" />
                               View
                             </button>
@@ -318,163 +309,6 @@ export function AdminRecords() {
               )
             )}
           </div>
-        </div>
-
-        {/* Record Detail Modal */}
-        {selectedRecord && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-screen overflow-y-auto">
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    {'diagnosis' in selectedRecord ? 'Medical Report Details' : 'Lab Record Details'}
-                  </h2>
-                  <button 
-                    onClick={() => setSelectedRecord(null)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
-                </div>
-                
-                <div className="space-y-6">
-                  {/* Basic Information */}
-                  <div className="bg-gray-50 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Basic Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Patient Name</label>
-                        <p className="text-gray-900 font-medium">{selectedRecord.patientName}</p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
-                          {'diagnosis' in selectedRecord ? 'Doctor' : 'Test Type'}
-                        </label>
-                        <p className="text-gray-900">
-                          {'diagnosis' in selectedRecord ? selectedRecord.doctorName : selectedRecord.testType}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Date Created</label>
-                        <p className="text-gray-900">
-                          {new Date('diagnosis' in selectedRecord ? selectedRecord.createdAt : selectedRecord.testDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">Record ID</label>
-                        <p className="text-gray-900 font-mono text-sm">{selectedRecord._id}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Medical Report Details */}
-                  {'diagnosis' in selectedRecord && (
-                    <>
-                      <div className="bg-emerald-50 rounded-lg p-6">
-                        <h3 className="text-lg font-semibold text-emerald-900 mb-4">Medical Information</h3>
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-emerald-700 mb-2">Diagnosis</label>
-                            <p className="text-emerald-900 bg-white p-4 rounded-md border border-emerald-200">
-                              {selectedRecord.diagnosis}
-                            </p>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-emerald-700 mb-2">Prescription</label>
-                            <p className="text-emerald-900 bg-white p-4 rounded-md border border-emerald-200">
-                              {selectedRecord.prescription}
-                            </p>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-emerald-700 mb-2">Recommendations</label>
-                            <p className="text-emerald-900 bg-white p-4 rounded-md border border-emerald-200">
-                              {selectedRecord.recommendations}
-                            </p>
-                          </div>
-                          {selectedRecord.notes && (
-                            <div>
-                              <label className="block text-sm font-medium text-emerald-700 mb-2">Additional Notes</label>
-                              <p className="text-emerald-900 bg-white p-4 rounded-md border border-emerald-200">
-                                {selectedRecord.notes}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Lab Record Details */}
-                  {'testType' in selectedRecord && (
-                    <>
-                      <div className="bg-blue-50 rounded-lg p-6">
-                        <h3 className="text-lg font-semibold text-blue-900 mb-4">Lab Information</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                          <div>
-                            <label className="block text-sm font-medium text-blue-700 mb-1">Test Type</label>
-                            <p className="text-blue-900 font-medium">{selectedRecord.testType}</p>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-blue-700 mb-1">Status</label>
-                            <span className={`px-3 py-1 text-sm font-medium rounded-full ${
-                              selectedRecord.status === 'completed' 
-                                ? 'bg-green-100 text-green-800' 
-                                : selectedRecord.status === 'pending'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}>
-                              {selectedRecord.status}
-                            </span>
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-blue-700 mb-1">Test Date</label>
-                            <p className="text-blue-900">{new Date(selectedRecord.testDate).toLocaleDateString()}</p>
-                          </div>
-                          {selectedRecord.doctorName && (
-                            <div>
-                              <label className="block text-sm font-medium text-blue-700 mb-1">Ordered by</label>
-                              <p className="text-blue-900">{selectedRecord.doctorName}</p>
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-blue-700 mb-2">Test Results</label>
-                          <p className="text-blue-900 bg-white p-4 rounded-md border border-blue-200">
-                            {selectedRecord.results}
-                          </p>
-                        </div>
-                        {selectedRecord.notes && (
-                          <div className="mt-4">
-                            <label className="block text-sm font-medium text-blue-700 mb-2">Notes</label>
-                            <p className="text-blue-900 bg-white p-4 rounded-md border border-blue-200">
-                              {selectedRecord.notes}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <div className="mt-8 flex justify-end space-x-3">
-                  <button 
-                    onClick={() => setSelectedRecord(null)}
-                    className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Close
-                  </button>
-                  <button className="px-6 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors flex items-center space-x-2">
-                    <Download className="h-4 w-4" />
-                    <span>Download</span>
-                  </button>
-                  <button className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors">
-                    Print
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
         </div>
       </div>
     </AdminLayout>
