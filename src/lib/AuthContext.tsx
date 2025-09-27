@@ -122,6 +122,7 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, role: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  validateSession: () => Promise<boolean>;
 }
 
 // 2. Create the context with a default value of 'undefined'
@@ -136,20 +137,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
 
+  // Helper function to check if token is expired
+  const isTokenExpired = (token: string): boolean => {
+    try {
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) return true;
+      
+      const payload = JSON.parse(atob(tokenParts[1]));
+      if (!payload.exp) return false; // No expiry means it doesn't expire
+      
+      const expiry = new Date(payload.exp * 1000);
+      const now = new Date();
+      return now > expiry;
+    } catch (error) {
+      console.error('Error checking token expiry:', error);
+      return true; // If we can't decode it, consider it expired
+    }
+  };
+
   useEffect(() => {
     const fetchUser = async () => {
       if (token && !user) {
+        // Check if token is expired before making request
+        if (isTokenExpired(token)) {
+          console.log('Token is expired, logging out');
+          logout();
+          return;
+        }
+        
         try {
           // Set the auth header for all subsequent requests
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend-production.up.railway.app/api'}/auth/me`);
+          const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/me`);
           setUser(response.data);
           localStorage.setItem('user', JSON.stringify(response.data));
-        } catch (error) {
-          console.error('Session token is invalid, logging out.');
+        } catch (error: any) {
+          console.error('Session token is invalid, logging out.', error);
+          if (error.response?.status === 401) {
+            console.log('401 error - token is invalid or expired');
+          }
           logout(); // Automatically log out if the token is bad
         }
       } else if (token) {
+        // Check token expiry even if we have user data
+        if (isTokenExpired(token)) {
+          console.log('Token is expired, logging out');
+          logout();
+          return;
+        }
         // Set auth header if we have token and user from localStorage
         axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       }
@@ -186,6 +221,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const validateSession = async (): Promise<boolean> => {
+    if (!token) return false;
+    
+    if (isTokenExpired(token)) {
+      logout();
+      return false;
+    }
+    
+    try {
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/me`);
+      return response.status === 200;
+    } catch (error) {
+      console.error('Session validation failed:', error);
+      logout();
+      return false;
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
@@ -203,6 +256,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     login,
     register,
     logout,
+    validateSession,
     isAuthenticated: !!token
   };
 

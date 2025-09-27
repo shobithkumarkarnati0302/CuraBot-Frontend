@@ -34,7 +34,7 @@ const timeSlots = [
 const doctorsByDept: { [key: string]: string[] } = {};
 
 export function Appointments() {
-  const { user, token } = useAuth();
+  const { user, token, validateSession } = useAuth();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<'book' | 'history'>('book');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -117,7 +117,30 @@ export function Appointments() {
     e.preventDefault();
     if (validateForm()) {
       try {
-        await dataService.createAppointment(formData);
+        // Validate session before attempting to create appointment
+        console.log('Validating session before creating appointment...');
+        const isSessionValid = await validateSession();
+        if (!isSessionValid) {
+          setError('Your session has expired. Please log in again.');
+          return;
+        }
+        
+        // Transform form data to match AppointmentData interface
+        const appointmentData = {
+          ...formData,
+          patientId: user?._id || '',
+          doctorId: '', // Will be set by backend
+          patientName: formData.fullName,
+          doctorName: formData.doctor,
+          patientEmail: formData.email,
+          patientPhone: formData.phone,
+          condition: formData.reason,
+          status: 'scheduled' as const,
+          completed: false
+        };
+        
+        console.log('Session validated, creating appointment...');
+        await dataService.createAppointment(appointmentData);
         setIsSubmitted(true);
         setError(null);
       } catch (error: any) {
@@ -152,7 +175,8 @@ export function Appointments() {
     if (!token) return;
     
     try {
-      const response = await fetch(`http://localhost:5000/api/appointments/${appointmentId}`, {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api';
+      const response = await fetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
