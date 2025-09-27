@@ -1,8 +1,13 @@
 {
   "build": {
     "env": {
-      "VITE_ENVIRONMENT": "production"
+      "VITE_ENVIRONMENT": "production",
+      "NODE_ENV": "production"
     }
+  },
+  "env": {
+    "VITE_ENVIRONMENT": "production",
+    "NODE_ENV": "production"
   },
   "rewrites": [
     {

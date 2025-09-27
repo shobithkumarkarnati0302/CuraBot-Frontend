@@ -134,7 +134,28 @@ import { config } from '../config/environment';
 const dataChangeNotifier = new DataChangeNotifier();
 
 class DataService {
-  private API_BASE_URL = config.API_BASE_URL;
+  private API_BASE_URL = this.getApiUrl();
+
+  private getApiUrl(): string {
+    // Use config first
+    if (config.API_BASE_URL) {
+      console.log('🔗 DataService: Using config API URL:', config.API_BASE_URL);
+      return config.API_BASE_URL;
+    }
+    
+    // Fallback: detect based on current location
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname.includes('vercel.app') || hostname === 'curabot-project.vercel.app') {
+        console.log('🔗 DataService: Detected Vercel deployment, using production API');
+        return 'https://curabot-backend.onrender.com/api';
+      }
+    }
+    
+    // Final fallback
+    console.log('🔗 DataService: Using localhost fallback');
+    return 'http://localhost:5000/api';
+  }
 
   // Test backend connectivity
   async testConnection(): Promise<boolean> {
