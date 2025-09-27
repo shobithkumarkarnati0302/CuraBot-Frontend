@@ -64,6 +64,38 @@ export interface AppointmentData {
   insuranceNumber?: string;
   emergencyContact?: string;
   emergencyPhone?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Report {
+  _id: string;
+  appointmentId: string;
+  patientId: string;
+  doctorId: string;
+  patientName: string;
+  doctorName: string;
+  diagnosis: string;
+  prescription: string;
+  recommendations: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface LabRecord {
+  _id: string;
+  patientId: string;
+  doctorId?: string;
+  patientName: string;
+  doctorName?: string;
+  testType: string;
+  testDate: string;
+  results: string;
+  status: 'pending' | 'completed' | 'reviewed';
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 // Enhanced data service with real-time synchronization
@@ -97,10 +129,12 @@ class DataChangeNotifier {
   }
 }
 
+import { config } from '../config/environment';
+
 const dataChangeNotifier = new DataChangeNotifier();
 
 class DataService {
-  private API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api';
+  private API_BASE_URL = config.API_BASE_URL;
 
   // Test backend connectivity
   async testConnection(): Promise<boolean> {
@@ -385,13 +419,86 @@ class DataService {
     }
   }
 
+  // Reports Management
+  async getAllReports(): Promise<Report[]> {
+    try {
+      console.log('DataService: Fetching all reports from:', `${this.API_BASE_URL}/reports/all`);
+      console.log('DataService: Auth headers:', this.getAuthHeaders());
+      
+      const response = await fetch(`${this.API_BASE_URL}/reports/all`, {
+        headers: this.getAuthHeaders()
+      });
+      
+      console.log('DataService: Reports response status:', response.status);
+      console.log('DataService: Reports response ok:', response.ok);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('DataService: Reports data received:', data);
+        return data;
+      } else {
+        const errorText = await response.text();
+        console.error('DataService: Reports API error:', response.status, errorText);
+      }
+      return [];
+    } catch (error) {
+      console.error('DataService: Reports fetch error:', error);
+      return [];
+    }
+  }
+
+  async getReportsByPatient(patientId: string): Promise<Report[]> {
+    try {
+      const response = await fetch(`${this.API_BASE_URL}/reports/patient/${patientId}`, {
+        headers: this.getAuthHeaders()
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      return [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  async getReportsByDoctor(doctorId: string): Promise<Report[]> {
+    try {
+      const response = await fetch(`${this.API_BASE_URL}/reports/doctor/${doctorId}`, {
+        headers: this.getAuthHeaders()
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      return [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  // Lab Records Management
+  async getAllLabRecords(): Promise<LabRecord[]> {
+    try {
+      const response = await fetch(`${this.API_BASE_URL}/lab-records`, {
+        headers: this.getAuthHeaders()
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+      return [];
+    } catch (error) {
+      return [];
+    }
+  }
+
   // Statistics
   async getDashboardStats() {
     try {
-      const [doctors, patients, appointments] = await Promise.all([
+      const [doctors, patients, appointments, reports, labRecords] = await Promise.all([
         this.getAllDoctors(),
         this.getAllPatients(),
-        this.getAllAppointments()
+        this.getAllAppointments(),
+        this.getAllReports(),
+        this.getAllLabRecords()
       ]);
 
       const today = new Date().toISOString().split('T')[0];
@@ -405,7 +512,14 @@ class DataService {
         totalAppointments: appointments.length,
         todayAppointments: todayAppointments.length,
         completedToday: completedToday.length,
-        pendingAppointments: appointments.filter(apt => apt.status === 'scheduled').length
+        pendingAppointments: appointments.filter(apt => apt.status === 'scheduled').length,
+        totalReports: reports.length,
+        totalLabRecords: labRecords.length,
+        recentReports: reports.filter(r => {
+          const reportDate = new Date(r.createdAt);
+          const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          return reportDate > weekAgo;
+        }).length
       };
     } catch (error) {
       return {
@@ -415,7 +529,10 @@ class DataService {
         totalAppointments: 0,
         todayAppointments: 0,
         completedToday: 0,
-        pendingAppointments: 0
+        pendingAppointments: 0,
+        totalReports: 0,
+        totalLabRecords: 0,
+        recentReports: 0
       };
     }
   }

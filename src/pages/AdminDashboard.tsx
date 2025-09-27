@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
 import { AdminLayout } from '../layouts/AdminLayout';
-import { dataService, Doctor, Patient, AppointmentData } from '../services/dataService';
+import { dataService, Doctor, Patient, AppointmentData, Report, LabRecord } from '../services/dataService';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 
 interface DashboardStats {
@@ -33,6 +33,9 @@ interface DashboardStats {
   pendingApprovals: number;
   totalRevenue: number;
   patientSatisfaction: number;
+  totalReports: number;
+  totalLabRecords: number;
+  recentReports: number;
 }
 
 interface RecentActivity {
@@ -52,11 +55,16 @@ export function AdminDashboard() {
     todayAppointments: 0,
     pendingApprovals: 0,
     totalRevenue: 125000,
-    patientSatisfaction: 4.7
+    patientSatisfaction: 4.7,
+    totalReports: 0,
+    totalLabRecords: 0,
+    recentReports: 0
   });
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  const [labRecords, setLabRecords] = useState<LabRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
@@ -168,15 +176,19 @@ export function AdminDashboard() {
   const fetchAllData = async () => {
     try {
       setIsLoading(true);
-      const [doctorsData, patientsData, appointmentsData] = await Promise.all([
+      const [doctorsData, patientsData, appointmentsData, reportsData, labRecordsData] = await Promise.all([
         dataService.getAllDoctors(),
         dataService.getAllPatients(),
-        dataService.getAllAppointments()
+        dataService.getAllAppointments(),
+        dataService.getAllReports(),
+        dataService.getAllLabRecords()
       ]);
 
       setDoctors(doctorsData);
       setPatients(patientsData);
       setAppointments(appointmentsData);
+      setReports(reportsData);
+      setLabRecords(labRecordsData);
 
       // Generate recent activities from real data
       const activities = generateRecentActivities(doctorsData, patientsData, appointmentsData);
@@ -188,12 +200,21 @@ export function AdminDashboard() {
         new Date(apt.date).toDateString() === today
       ).length;
 
+      // Calculate recent reports (last 7 days)
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const recentReports = reportsData.filter(report => 
+        new Date(report.createdAt) > weekAgo
+      ).length;
+
       setStats(prev => ({
         ...prev,
         totalDoctors: doctorsData.length,
         totalPatients: patientsData.length,
         todayAppointments,
-        pendingApprovals: appointmentsData.filter((apt: any) => apt.status === 'pending').length
+        pendingApprovals: appointmentsData.filter((apt: any) => apt.status === 'pending').length,
+        totalReports: reportsData.length,
+        totalLabRecords: labRecordsData.length,
+        recentReports
       }));
     } catch (error) {
       console.error('Error fetching admin data:', error);
@@ -222,7 +243,7 @@ export function AdminDashboard() {
   const renderOverview = () => (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex items-center">
             <div className="p-3 rounded-full bg-blue-100 text-blue-600">
@@ -267,6 +288,30 @@ export function AdminDashboard() {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Pending Approvals</p>
               <p className="text-2xl font-bold text-gray-900">{stats.pendingApprovals}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-emerald-100 text-emerald-600">
+              <FileText className="h-6 w-6" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Medical Reports</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalReports}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center">
+            <div className="p-3 rounded-full bg-indigo-100 text-indigo-600">
+              <TrendingUp className="h-6 w-6" />
+            </div>
+            <div className="ml-4">
+              <p className="text-sm font-medium text-gray-600">Lab Records</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalLabRecords}</p>
             </div>
           </div>
         </div>
@@ -664,9 +709,131 @@ export function AdminDashboard() {
           </div>
         )}
         {activeTab === 'records' && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Centralized Records</h2>
-            <p className="text-gray-600">Medical records management coming soon...</p>
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h2 className="text-2xl font-bold text-gray-900">Medical Records & Reports</h2>
+              <div className="flex items-center space-x-4">
+                <span className="text-sm text-gray-600">
+                  {reports.length} Reports • {labRecords.length} Lab Records
+                </span>
+              </div>
+            </div>
+
+            {/* Reports Section */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Medical Reports</h3>
+              {isLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                </div>
+              ) : reports.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Doctor</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Diagnosis</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {reports.slice(0, 10).map((report) => (
+                        <tr key={report._id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{report.patientName}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{report.doctorName}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{report.diagnosis.substring(0, 50)}...</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {new Date(report.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button className="text-blue-600 hover:text-blue-900 mr-3 flex items-center">
+                              <Eye className="h-4 w-4 mr-1" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No medical reports found.</p>
+                  <p className="text-xs mt-1">Reports will appear here as doctors generate them.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Lab Records Section */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Lab Records</h3>
+              {isLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                </div>
+              ) : labRecords.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Patient</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Test Type</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {labRecords.slice(0, 10).map((record) => (
+                        <tr key={record._id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{record.patientName}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{record.testType}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                              record.status === 'completed' 
+                                ? 'bg-green-100 text-green-800' 
+                                : record.status === 'pending'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {record.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {new Date(record.testDate).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                            <button className="text-blue-600 hover:text-blue-900 mr-3 flex items-center">
+                              <Eye className="h-4 w-4 mr-1" />
+                              View
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <p>No lab records found.</p>
+                  <p className="text-xs mt-1">Lab records will appear here as they are created.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
         {activeTab === 'feedback' && (

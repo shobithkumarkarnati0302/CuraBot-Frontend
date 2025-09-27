@@ -164,7 +164,7 @@ export class AIChatService {
   private quotaExceeded: boolean = false;
   private lastQuotaCheck: number = 0;
   private requestCount: number = 0;
-  private dailyLimit: number = 45; // Leave some buffer from the 50 limit
+  private dailyLimit: number = 30; // More conservative limit to prevent quota exhaustion
 
   constructor(apiKey?: string) {
     if (apiKey) {
@@ -257,6 +257,15 @@ export class AIChatService {
     }
   }
 
+  // Public method to reset quota (useful for testing or manual reset)
+  resetQuota() {
+    this.quotaExceeded = false;
+    this.requestCount = 0;
+    localStorage.removeItem('gemini_quota_reset');
+    localStorage.removeItem('gemini_request_count');
+    console.log('Quota manually reset');
+  }
+
   private getLanguageCode(lang: string): string {
     const codes: { [key: string]: string } = {
       'en': 'en-US',
@@ -290,8 +299,15 @@ export class AIChatService {
         return this.getIntelligentFallbackResponse(message);
       }
 
-      // Increment request count
+      // Increment request count and persist to localStorage
       this.requestCount++;
+      localStorage.setItem('gemini_request_count', this.requestCount.toString());
+      
+      // Set quota reset time if not already set (24 hours from now)
+      if (!localStorage.getItem('gemini_quota_reset')) {
+        const resetTime = Date.now() + (24 * 60 * 60 * 1000); // 24 hours from now
+        localStorage.setItem('gemini_quota_reset', resetTime.toString());
+      }
       
       const prompt = this.buildMedicalPrompt(message, this.currentLanguage);
       const result = await this.model.generateContent(prompt);
@@ -319,6 +335,12 @@ export class AIChatService {
       if (detail.includes('429') || detail.includes('quota') || detail.includes('exceeded')) {
         this.quotaExceeded = true;
         this.lastQuotaCheck = Date.now();
+        
+        // Set quota reset time to 24 hours from now
+        const resetTime = Date.now() + (24 * 60 * 60 * 1000);
+        localStorage.setItem('gemini_quota_reset', resetTime.toString());
+        localStorage.setItem('gemini_request_count', this.dailyLimit.toString());
+        
         console.log('Quota exceeded, switching to intelligent fallback mode');
         return this.getIntelligentFallbackResponse(message);
       }
@@ -506,6 +528,31 @@ Would you like me to help you schedule this procedure?`,
   }
 
   private isQuotaExceeded(): boolean {
+    // Check if we have a stored quota reset time
+    const storedQuotaReset = localStorage.getItem('gemini_quota_reset');
+    const storedRequestCount = localStorage.getItem('gemini_request_count');
+    
+    if (storedQuotaReset && storedRequestCount) {
+      const resetTime = parseInt(storedQuotaReset);
+      const currentCount = parseInt(storedRequestCount);
+      
+      // If we're past the reset time, clear the quota
+      if (Date.now() > resetTime) {
+        this.quotaExceeded = false;
+        this.requestCount = 0;
+        localStorage.removeItem('gemini_quota_reset');
+        localStorage.removeItem('gemini_request_count');
+        return false;
+      }
+      
+      // Update our internal state from localStorage
+      this.requestCount = currentCount;
+      if (currentCount >= this.dailyLimit) {
+        this.quotaExceeded = true;
+        return true;
+      }
+    }
+    
     if (!this.quotaExceeded) return false;
     
     // Reset quota status after 24 hours
@@ -513,6 +560,8 @@ Would you like me to help you schedule this procedure?`,
     if (hoursSinceQuotaCheck >= 24) {
       this.quotaExceeded = false;
       this.requestCount = 0;
+      localStorage.removeItem('gemini_quota_reset');
+      localStorage.removeItem('gemini_request_count');
       return false;
     }
     
@@ -538,7 +587,6 @@ Would you like me to help you schedule this procedure?`,
 
   private getPatternBasedResponse(message: string): AIResponse | null {
     const lowerMessage = message.toLowerCase();
-    const translations = TRANSLATIONS[this.currentLanguage as keyof typeof TRANSLATIONS] || TRANSLATIONS.en;
 
     // Emergency keywords
     const emergencyKeywords = ['emergency', 'urgent', 'chest pain', 'heart attack', 'stroke', 'bleeding', 'unconscious', 'accident', 'severe pain'];
@@ -598,9 +646,34 @@ Would you like me to help you schedule this procedure?`,
     return null;
   }
 
+  private getQuotaStatus(): { exceeded: boolean; resetTime?: string; requestsUsed?: number } {
+    const storedQuotaReset = localStorage.getItem('gemini_quota_reset');
+    const storedRequestCount = localStorage.getItem('gemini_request_count');
+    
+    if (storedQuotaReset && storedRequestCount) {
+      const resetTime = parseInt(storedQuotaReset);
+      const currentCount = parseInt(storedRequestCount);
+      
+      if (Date.now() > resetTime) {
+        return { exceeded: false };
+      }
+      
+      const timeUntilReset = Math.ceil((resetTime - Date.now()) / (1000 * 60 * 60)); // hours
+      
+      return {
+        exceeded: currentCount >= this.dailyLimit,
+        resetTime: timeUntilReset > 1 ? `${timeUntilReset} hours` : 'less than 1 hour',
+        requestsUsed: currentCount
+      };
+    }
+    
+    return { exceeded: this.quotaExceeded };
+  }
+
   private getFallbackResponse(message: string): AIResponse {
     const lowerMessage = message.toLowerCase();
     const translations = TRANSLATIONS[this.currentLanguage as keyof typeof TRANSLATIONS] || TRANSLATIONS.en;
+    const quotaStatus = this.getQuotaStatus();
 
     if (lowerMessage.includes('hello') || lowerMessage.includes('hi') || lowerMessage.includes('hey')) {
       return {
@@ -632,8 +705,16 @@ Would you like me to help you schedule this procedure?`,
       };
     }
     
+    // Build status message based on quota
+    let statusMessage = '';
+    if (quotaStatus.exceeded && quotaStatus.resetTime) {
+      statusMessage = `🤖 **AI responses temporarily limited** (resets in ${quotaStatus.resetTime}), but I can still help you with comprehensive medical assistance:\n\n`;
+    } else {
+      statusMessage = `🤖 **I'm here to help** with comprehensive medical assistance:\n\n`;
+    }
+
     return {
-      message: `${translations.default}\n\n🤖 **I'm currently running in offline mode** but I can still help you with:\n\n📅 **Appointments & Scheduling**\n• Book new appointments\n• Find available doctors\n• Manage existing appointments\n\n🏥 **Hospital Services**\n• Information about our departments\n• Specialist referrals\n• General health guidance\n\n📊 **Reports & Records**\n• Access your medical reports\n• Download test results\n• View appointment history\n\n🚨 **Emergency Support**\n• Emergency contact information\n• Urgent care guidance\n• When to seek immediate help\n\nWhat can I help you with today?`,
+      message: `${translations.default}\n\n${statusMessage}📅 **Appointments & Scheduling**\n• Book new appointments\n• Find available doctors\n• Manage existing appointments\n\n🏥 **Hospital Services**\n• Information about our departments\n• Specialist referrals\n• General health guidance\n\n📊 **Reports & Records**\n• Access your medical reports\n• Download test results\n• View appointment history\n\n🚨 **Emergency Support**\n• Emergency contact information\n• Urgent care guidance\n• When to seek immediate help\n\nWhat can I help you with today?`,
       confidence: 0.7,
       source: 'fallback',
       suggestions: ['Book Appointment', 'Find Doctor', 'Emergency Help', 'View Reports']
