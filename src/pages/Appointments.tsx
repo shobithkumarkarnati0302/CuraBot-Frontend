@@ -118,7 +118,6 @@ export function Appointments() {
     if (validateForm()) {
       try {
         // Validate session before attempting to create appointment
-        console.log('Validating session before creating appointment...');
         const isSessionValid = await validateSession();
         if (!isSessionValid) {
           setError('Your session has expired. Please log in again.');
@@ -139,12 +138,10 @@ export function Appointments() {
           completed: false
         };
         
-        console.log('Session validated, creating appointment...');
         await dataService.createAppointment(appointmentData);
         setIsSubmitted(true);
         setError(null);
       } catch (error: any) {
-        console.error('Error booking appointment:', error);
         setError(error.message || 'Failed to book appointment. Please try again.');
       }
     }
@@ -164,7 +161,6 @@ export function Appointments() {
       
       setAppointments(userAppointments as Appointment[]);
     } catch (error) {
-      console.error('Error fetching appointments:', error);
       setError('Failed to load appointments');
     } finally {
       setIsLoading(false);
@@ -187,7 +183,7 @@ export function Appointments() {
         setAppointments(appointments.filter(apt => apt._id !== appointmentId));
       }
     } catch (error) {
-      console.error('Error canceling appointment:', error);
+      // Handle error silently or show user-friendly message
     }
   };
 
@@ -224,7 +220,7 @@ export function Appointments() {
       });
       Object.assign(doctorsByDept, deptMap);
     } catch (error) {
-      console.error('Error fetching doctors:', error);
+      // Handle error silently
     }
   };
 

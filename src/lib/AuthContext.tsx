@@ -150,7 +150,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const now = new Date();
       return now > expiry;
     } catch (error) {
-      console.error('Error checking token expiry:', error);
       return true; // If we can't decode it, consider it expired
     }
   };
@@ -160,7 +159,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (token && !user) {
         // Check if token is expired before making request
         if (isTokenExpired(token)) {
-          console.log('Token is expired, logging out');
           logout();
           return;
         }
@@ -172,16 +170,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(response.data);
           localStorage.setItem('user', JSON.stringify(response.data));
         } catch (error: any) {
-          console.error('Session token is invalid, logging out.', error);
-          if (error.response?.status === 401) {
-            console.log('401 error - token is invalid or expired');
-          }
           logout(); // Automatically log out if the token is bad
         }
       } else if (token) {
         // Check token expiry even if we have user data
         if (isTokenExpired(token)) {
-          console.log('Token is expired, logging out');
           logout();
           return;
         }
@@ -203,7 +196,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(newToken);
       setUser(userData);
     } catch (error) {
-      console.error('Login error:', error);
       throw error; // Re-throw the error so the Login page can catch it
     }
   };
@@ -216,7 +208,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(newToken);
       setUser(userData);
     } catch (error) {
-      console.error('Registration error:', error);
       throw error;
     }
   };
@@ -233,7 +224,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/me`);
       return response.status === 200;
     } catch (error) {
-      console.error('Session validation failed:', error);
       logout();
       return false;
     }

@@ -105,15 +105,12 @@ class DataService {
   // Test backend connectivity
   async testConnection(): Promise<boolean> {
     try {
-      console.log('DataService: Testing connection to:', this.API_BASE_URL);
       const response = await fetch(`${this.API_BASE_URL}/health`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
-      console.log('DataService: Health check response:', response.status);
       return response.ok;
     } catch (error) {
-      console.error('DataService: Connection test failed:', error);
       return false;
     }
   }
@@ -121,29 +118,6 @@ class DataService {
   // Helper function to get auth headers
   private getAuthHeaders() {
     const token = localStorage.getItem('token');
-    console.log('DataService: Getting auth headers, token exists:', !!token);
-    if (token) {
-      console.log('DataService: Token preview:', token.substring(0, 20) + '...');
-      // Check if token looks like a valid JWT (has 3 parts separated by dots)
-      const tokenParts = token.split('.');
-      console.log('DataService: Token parts count:', tokenParts.length);
-      if (tokenParts.length === 3) {
-        try {
-          // Decode the payload to check expiry (without verification)
-          const payload = JSON.parse(atob(tokenParts[1]));
-          console.log('DataService: Token payload:', payload);
-          if (payload.exp) {
-            const expiry = new Date(payload.exp * 1000);
-            const now = new Date();
-            console.log('DataService: Token expires at:', expiry);
-            console.log('DataService: Current time:', now);
-            console.log('DataService: Token expired:', now > expiry);
-          }
-        } catch (e) {
-          console.error('DataService: Error decoding token:', e);
-        }
-      }
-    }
     return {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` })
@@ -161,7 +135,6 @@ class DataService {
       }
       return [];
     } catch (error) {
-      console.error('Error fetching doctors:', error);
       return [];
     }
   }
@@ -178,7 +151,6 @@ class DataService {
       }
       return null;
     } catch (error) {
-      console.error('Error creating doctor:', error);
       return null;
     }
   }
@@ -193,7 +165,6 @@ class DataService {
       }
       return null;
     } catch (error) {
-      console.error('Error fetching doctor:', error);
       return null;
     }
   }
@@ -210,7 +181,6 @@ class DataService {
       }
       return null;
     } catch (error) {
-      console.error('Error updating doctor:', error);
       return null;
     }
   }
@@ -226,7 +196,6 @@ class DataService {
       }
       return [];
     } catch (error) {
-      console.error('Error fetching patients:', error);
       return [];
     }
   }
@@ -243,7 +212,6 @@ class DataService {
       }
       return null;
     } catch (error) {
-      console.error('Error creating patient:', error);
       return null;
     }
   }
@@ -260,7 +228,6 @@ class DataService {
       }
       return null;
     } catch (error) {
-      console.error('Error updating patient:', error);
       return null;
     }
   }
@@ -278,14 +245,12 @@ class DataService {
       
       return await response.json();
     } catch (error) {
-      console.error('Error fetching appointments:', error);
       return [];
     }
   }
 
   // Helper method to handle authentication errors
   private handleAuthError() {
-    console.log('DataService: Handling authentication error - clearing tokens');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     // Redirect to login page
@@ -293,11 +258,7 @@ class DataService {
   }
 
   async createAppointment(appointmentData: Omit<AppointmentData, '_id'>): Promise<AppointmentData> {
-    console.log('DataService: Creating appointment with data:', appointmentData);
-    console.log('DataService: API URL:', `${this.API_BASE_URL}/appointments`);
-    
     const headers = this.getAuthHeaders();
-    console.log('DataService: Auth headers:', headers);
     
     // Check if we have a token before making the request
     const token = localStorage.getItem('token');
@@ -311,15 +272,10 @@ class DataService {
       body: JSON.stringify(appointmentData)
     });
 
-    console.log('DataService: Create appointment response status:', response.status);
-    console.log('DataService: Response headers:', Object.fromEntries(response.headers.entries()));
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('DataService: Create appointment error response:', errorText);
       
       if (response.status === 401) {
-        console.error('DataService: 401 Unauthorized - token might be expired or invalid');
         this.handleAuthError();
         throw new Error('Your session has expired. Please log in again.');
       } else if (response.status === 403) {
@@ -330,7 +286,6 @@ class DataService {
     }
 
     const result = await response.json();
-    console.log('DataService: Create appointment successful:', result);
     
     // Notify all components that appointment data has changed
     dataChangeNotifier.notify('appointments');
@@ -352,42 +307,32 @@ class DataService {
       
       return await response.json();
     } catch (error) {
-      console.error('Error updating appointment:', error);
       throw error;
     }
   }
 
   async updateAppointmentStatus(appointmentId: string, status: 'pending' | 'confirmed' | 'scheduled' | 'completed' | 'cancelled', completed?: boolean): Promise<AppointmentData> {
     try {
-      console.log(`DataService: Updating appointment ${appointmentId} to status ${status}`);
-      
       // Test basic connectivity first
       try {
-        const testResponse = await fetch(`${this.API_BASE_URL}/appointments`, {
+        await fetch(`${this.API_BASE_URL}/appointments`, {
           method: 'GET',
           headers: this.getAuthHeaders()
         });
-        console.log(`DataService: Test connection status ${testResponse.status}`);
       } catch (testError) {
-        console.error('DataService: Cannot connect to server:', testError);
         throw new Error('Cannot connect to server. Please check if the backend is running.');
       }
       
       const requestBody = { status, completed: completed ?? (status === 'completed') };
-      console.log('DataService: Request body:', requestBody);
-      console.log('DataService: Request URL:', `${this.API_BASE_URL}/appointments/${appointmentId}/status`);
       
       const response = await fetch(`${this.API_BASE_URL}/appointments/${appointmentId}/status`, {
         method: 'PATCH',
         headers: this.getAuthHeaders(),
         body: JSON.stringify(requestBody)
       });
-
-      console.log(`DataService: Response status ${response.status}`);
       
       if (!response.ok) {
         const errorData = await response.text();
-        console.error('DataService: Error response:', errorData);
         
         if (response.status === 401) {
           throw new Error('Authentication failed. Please log in again.');
@@ -401,7 +346,6 @@ class DataService {
       }
 
       const result = await response.json();
-      console.log('DataService: Update successful:', result);
       
       // Notify all components that appointment data has changed
       dataChangeNotifier.notify('appointments');
@@ -409,7 +353,6 @@ class DataService {
       dataChangeNotifier.notify('patient-dashboard');
       return result;
     } catch (error: any) {
-      console.error('DataService: Error in updateAppointmentStatus:', error);
       throw error; // Re-throw the original error instead of wrapping it
     }
   }
@@ -429,7 +372,6 @@ class DataService {
       }
       return [];
     } catch (error) {
-      console.error('Error fetching doctor appointments:', error);
       return [];
     }
   }
@@ -439,7 +381,6 @@ class DataService {
       const allAppointments = await this.getAllAppointments();
       return allAppointments.filter(apt => apt.patientId === patientId);
     } catch (error) {
-      console.error('Error fetching patient appointments:', error);
       return [];
     }
   }
@@ -467,7 +408,6 @@ class DataService {
         pendingAppointments: appointments.filter(apt => apt.status === 'scheduled').length
       };
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
       return {
         totalDoctors: 0,
         activeDoctors: 0,

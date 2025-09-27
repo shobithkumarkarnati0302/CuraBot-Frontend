@@ -161,7 +161,6 @@ export function ChatBot() {
       playNotification();
       setSelectedImage(null);
     } catch (error) {
-      console.error('Error getting AI response:', error);
       const fallbackMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
@@ -189,7 +188,6 @@ export function ChatBot() {
       setInputMessage(transcript);
       setIsListening(false);
     } catch (error) {
-      console.error('Voice input error:', error);
       setIsListening(false);
     }
   };
