@@ -25,7 +25,7 @@ export function AdminRecords() {
       
       // First, let's test the simple endpoint
       try {
-        const testResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'production' ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api')}/reports/test`);
+        const testResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api')}/reports/test`);
         const testData = await testResponse.json();
         console.log('AdminRecords: Test endpoint response:', testData);
       } catch (testError) {
@@ -63,7 +63,8 @@ export function AdminRecords() {
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
@@ -309,6 +310,7 @@ export function AdminRecords() {
               )
             )}
           </div>
+        </div>
         </div>
       </div>
     </AdminLayout>

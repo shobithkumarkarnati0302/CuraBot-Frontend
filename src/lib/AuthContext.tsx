@@ -166,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           // Set the auth header for all subsequent requests
           axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-          const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/me`);
+          const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api')}/auth/me`);
           setUser(response.data);
           localStorage.setItem('user', JSON.stringify(response.data));
         } catch (error: any) {
@@ -189,7 +189,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 4. Add types to all function parameters
   const login = async (email: string, password: string) => {
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/login`, { email, password });
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api')}/auth/login`, { email, password });
       const { token: newToken, user: userData } = response.data;
       localStorage.setItem('token', newToken);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -202,7 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (name: string, email: string, password: string, role: string) => {
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/register`, { name, email, password, role });
+      const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api')}/auth/register`, { name, email, password, role });
       const { token: newToken, user: userData } = response.data;
       localStorage.setItem('token', newToken);
       setToken(newToken);
@@ -221,7 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api'}/auth/me`);
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api')}/auth/me`);
       return response.status === 200;
     } catch (error) {
       logout();

@@ -132,7 +132,7 @@ class DataChangeNotifier {
 const dataChangeNotifier = new DataChangeNotifier();
 
 class DataService {
-  private API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'production' ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api');
+  private API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api');
 
   // Test backend connectivity
   async testConnection(): Promise<boolean> {

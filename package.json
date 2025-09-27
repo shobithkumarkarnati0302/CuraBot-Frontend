@@ -4,12 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "npx vite --mode development",
-    "build": "vite build --mode production",
-    "build:local": "vite build --mode development",
+    "dev": "npx vite",
+    "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "preview:prod": "vite preview --mode production"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

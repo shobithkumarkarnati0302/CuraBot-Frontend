@@ -171,7 +171,7 @@ export function Appointments() {
     if (!token) return;
     
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://curabot-backend.onrender.com/api';
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? 'https://curabot-backend.onrender.com/api' : 'http://localhost:5000/api');
       const response = await fetch(`${API_BASE_URL}/appointments/${appointmentId}`, {
         method: 'DELETE',
         headers: {

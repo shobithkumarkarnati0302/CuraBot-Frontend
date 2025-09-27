@@ -100,5 +100,11 @@ temp/
 ehthumbs.db
 Thumbs.db
 
+# Deployment files
+vercel.json
+.vercel/
+render.yaml
+Procfile
+
 # Miscellaneous
 *.tsbuildinfo
