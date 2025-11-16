@@ -13,7 +13,7 @@ interface Report {
     name: string;
     specialization: string;
   };
-  appointmentId: string;
+  appointmentId: string | { _id: string; date: string; time: string };
   title: string;
   diagnosis: string;
   prescription: string;
@@ -34,6 +34,7 @@ export const DoctorReports: React.FC = () => {
   const [showReportModal, setShowReportModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentData | null>(null);
   const [selectedReport, setSelectedReport] = useState<Report | null>(null);
   const [editReportForm, setEditReportForm] = useState({
@@ -103,15 +104,14 @@ export const DoctorReports: React.FC = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         // Ensure we always set an array
-        setExistingReports(Array.isArray(reportsResponse.data) ? reportsResponse.data : []);
+        const reports = Array.isArray(reportsResponse.data) ? reportsResponse.data : [];
+        setExistingReports(reports);
       } catch (reportsError) {
-        console.error('Error fetching reports:', reportsError);
         // Set empty array if reports fetch fails
         setExistingReports([]);
       }
 
     } catch (error) {
-      console.error('Error fetching data:', error);
       setMessage({ type: 'error', text: 'Failed to fetch data' });
     } finally {
       setIsLoading(false);
@@ -119,6 +119,24 @@ export const DoctorReports: React.FC = () => {
   };
 
   const handleGenerateReport = (appointment: AppointmentData) => {
+    // Check if report already exists before opening the modal
+    const existingReport = existingReports.find(report => {
+      // Handle both cases: appointmentId as string or as populated object
+      const reportAppointmentId = typeof report.appointmentId === 'object' 
+        ? report.appointmentId._id 
+        : report.appointmentId;
+      
+      return reportAppointmentId === appointment._id || 
+             reportAppointmentId?.toString() === appointment._id?.toString();
+    });
+    
+    if (existingReport) {
+      setSelectedAppointment(appointment);
+      setSelectedReport(existingReport);
+      setShowDuplicateModal(true);
+      return;
+    }
+    
     setSelectedAppointment(appointment);
     setReportForm({
       title: `Medical Report - ${(appointment as any).fullName || appointment.patientName}`,
@@ -146,13 +164,12 @@ export const DoctorReports: React.FC = () => {
         notes: reportForm.notes
       };
       
-      console.log('Creating report with data:', reportData);
-      console.log('Selected appointment:', selectedAppointment);
-      
       // Check if report already exists before making the API call
       const existingReport = existingReports.find(report => report.appointmentId === selectedAppointment._id);
       if (existingReport) {
         setMessage({ type: 'error', text: 'A report already exists for this appointment!' });
+        setIsSubmittingReport(false);
+        setTimeout(() => setMessage(null), 3000);
         return;
       }
       
@@ -175,17 +192,28 @@ export const DoctorReports: React.FC = () => {
       await fetchData();
       setTimeout(() => setMessage(null), 3000);
     } catch (error: any) {
-      console.error('=== FRONTEND ERROR ===');
-      console.error('Full error:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      console.error('Error message:', error.message);
-      console.error('Request config:', error.config);
-      setMessage({ 
-        type: 'error', 
-        text: error.response?.data?.message || `Failed to generate report: ${error.message}` 
-      });
-      setTimeout(() => setMessage(null), 3000);
+      let errorMessage = 'Failed to generate report. Please try again.';
+      
+      if (error.response?.status === 400) {
+        if (error.response.data?.message === 'Report already exists for this appointment') {
+          errorMessage = 'A report already exists for this appointment. Please refresh the page to see updated data.';
+          // Refresh data to sync the UI
+          fetchData();
+        } else {
+          errorMessage = error.response.data?.message || 'Invalid request. Please check your input.';
+        }
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You are not authorized to create a report for this appointment.';
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Appointment not found. Please refresh the page.';
+      } else if (error.response?.status >= 500) {
+        errorMessage = 'Server error. Please try again later.';
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      setMessage({ type: 'error', text: errorMessage });
+      setTimeout(() => setMessage(null), 5000);
     } finally {
       setIsSubmittingReport(false);
     }
@@ -237,6 +265,12 @@ export const DoctorReports: React.FC = () => {
     });
   };
 
+  const closeDuplicateModal = () => {
+    setShowDuplicateModal(false);
+    setSelectedAppointment(null);
+    setSelectedReport(null);
+  };
+
   const handleEditReportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReport || !user?._id) return;
@@ -261,7 +295,6 @@ export const DoctorReports: React.FC = () => {
         await fetchData(); // Refresh the data
       }
     } catch (error: any) {
-      console.error('Error updating report:', error);
       setMessage({ 
         type: 'error', 
         text: error.response?.data?.message || 'Failed to update report. Please try again.' 
@@ -271,24 +304,9 @@ export const DoctorReports: React.FC = () => {
     }
   };
 
-  const getAppointmentsWithoutReports = () => {
-    // Ensure existingReports is an array before using .some()
-    const reportsArray = Array.isArray(existingReports) ? existingReports : [];
-    
-    // Filter out appointments that already have reports
-    const filtered = completedAppointments.filter(appointment => {
-      const hasReport = reportsArray.some(report => {
-        // Check both string and ObjectId formats for appointmentId
-        return report.appointmentId === appointment._id || 
-               report.appointmentId?.toString() === appointment._id?.toString();
-      });
-      return !hasReport;
-    });
-    
-    return filtered;
-  };
 
-  const filteredAppointments = getAppointmentsWithoutReports().filter(appointment => {
+
+  const filteredAppointments = completedAppointments.filter(appointment => {
     const patientName = (appointment as any).fullName || appointment.patientName || '';
     return patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
            (appointment.condition || appointment.reason || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -317,6 +335,9 @@ export const DoctorReports: React.FC = () => {
           </div>
         )}
 
+
+
+
         {/* Search */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
           <div className="relative">
@@ -341,14 +362,14 @@ export const DoctorReports: React.FC = () => {
             <div>
               <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
                 <Plus className="h-5 w-5 mr-2 text-blue-600" />
-                Generate Reports ({filteredAppointments.length})
+                Completed Appointments ({filteredAppointments.length})
               </h2>
               
               {filteredAppointments.length === 0 ? (
                 <div className="bg-white rounded-lg shadow-sm p-8 text-center">
                   <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-600 mb-2">No Pending Reports</h3>
-                  <p className="text-gray-500">All completed appointments have reports generated.</p>
+                  <h3 className="text-lg font-medium text-gray-600 mb-2">No Completed Appointments</h3>
+                  <p className="text-gray-500">Completed appointments will appear here for report generation.</p>
                 </div>
               ) : (
                 <div className="grid gap-4">
@@ -363,6 +384,17 @@ export const DoctorReports: React.FC = () => {
                             <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
                               Completed
                             </span>
+                            {existingReports.some(report => {
+                              const reportAppointmentId = typeof report.appointmentId === 'object' 
+                                ? report.appointmentId._id 
+                                : report.appointmentId;
+                              return reportAppointmentId === appointment._id || 
+                                     reportAppointmentId?.toString() === appointment._id?.toString();
+                            }) && (
+                              <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800">
+                                Report Exists
+                              </span>
+                            )}
                           </div>
                           
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600 mb-3">
@@ -764,7 +796,80 @@ export const DoctorReports: React.FC = () => {
             </div>
           </div>
         )}
+
+{/* Duplicate Report Modal */}
+{showDuplicateModal && (
+<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+  <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+    <div className="flex items-center justify-between p-6 border-b">
+      <h3 className="text-lg font-semibold text-gray-900">Report Already Exists</h3>
+      <button
+        onClick={closeDuplicateModal}
+        className="text-gray-400 hover:text-gray-600 transition-colors"
+      >
+        <X className="h-6 w-6" />
+      </button>
+    </div>
+    
+    <div className="p-6">
+      <div className="flex items-center space-x-3 mb-4">
+        <div className="flex-shrink-0">
+          <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+            <FileText className="h-5 w-5 text-yellow-600" />
+          </div>
+        </div>
+        <div>
+          <h4 className="text-sm font-medium text-gray-900">
+            A report has already been generated for this patient
+          </h4>
+          <p className="text-sm text-gray-500 mt-1">
+            Patient: {selectedAppointment ? ((selectedAppointment as any).fullName || selectedAppointment.patientName) : 'Unknown'}
+          </p>
+        </div>
       </div>
-    </DoctorLayout>
-  );
+      
+      {selectedReport && (
+        <div className="bg-gray-50 p-4 rounded-lg mb-4">
+          <h5 className="text-sm font-medium text-gray-700 mb-2">Existing Report Details:</h5>
+          <div className="space-y-1 text-sm text-gray-600">
+            <p><span className="font-medium">Title:</span> {selectedReport.title}</p>
+            <p><span className="font-medium">Generated:</span> {new Date(selectedReport.createdAt).toLocaleDateString()}</p>
+            <p><span className="font-medium">Diagnosis:</span> {selectedReport.diagnosis.substring(0, 100)}{selectedReport.diagnosis.length > 100 ? '...' : ''}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end space-x-3">
+        <button
+          onClick={closeDuplicateModal}
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+        >
+          Close
+        </button>
+        <button
+          onClick={() => {
+            closeDuplicateModal();
+            if (selectedReport) handleViewReport(selectedReport);
+          }}
+          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors"
+        >
+          View Report
+        </button>
+        <button
+          onClick={() => {
+            closeDuplicateModal();
+            if (selectedReport) handleEditReport(selectedReport);
+          }}
+          className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 transition-colors"
+        >
+          Edit Report
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+)}
+</div>
+</DoctorLayout>
+);
 };
