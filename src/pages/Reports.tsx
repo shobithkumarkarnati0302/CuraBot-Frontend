@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Download, Calendar, User, Stethoscope, AlertCircle, Search, Filter } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
-import axios from 'axios';
+import api from '../config/api';
 import jsPDF from 'jspdf';
 
 interface Report {
@@ -37,16 +37,12 @@ export const Reports: React.FC = () => {
   const fetchReports = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/reports/patient', {
+      const response = await api.get('/reports/patient', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setReports(response.data);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setReports(data);
     } catch (error: any) {
-      console.error('=== PATIENT REPORTS ERROR ===');
-      console.error('Full error:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      console.error('Error message:', error.message);
       setError('Failed to fetch reports');
     } finally {
       setLoading(false);

@@ -3,7 +3,7 @@ import { Eye, Plus, Search, X, FileText, Calendar, User, Edit, Clock } from 'luc
 import { useAuth } from '../lib/AuthContext';
 import { DoctorLayout } from '../layouts/DoctorLayout';
 import { dataService, AppointmentData } from '../services/dataService';
-import axios from 'axios';
+import api from '../config/api';
 
 interface Report {
   _id: string;
@@ -100,7 +100,7 @@ export const DoctorReports: React.FC = () => {
       // Fetch existing reports
       const token = localStorage.getItem('token');
       try {
-        const reportsResponse = await axios.get('http://localhost:5000/api/reports/doctor', {
+        const reportsResponse = await api.get('/reports/doctor', {
           headers: { Authorization: `Bearer ${token}` }
         });
         // Ensure we always set an array
@@ -173,7 +173,7 @@ export const DoctorReports: React.FC = () => {
         return;
       }
       
-      await axios.post('http://localhost:5000/api/reports', reportData, {
+      await api.post('/reports', reportData, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -278,8 +278,8 @@ export const DoctorReports: React.FC = () => {
     setIsSubmittingReport(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.put(
-        `http://localhost:5000/api/reports/${selectedReport._id}`,
+      const response = await api.put(
+        `/reports/${selectedReport._id}`,
         editReportForm,
         {
           headers: {
