@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Users, 
   UserCheck, 
   Calendar, 
   FileText, 
-  Activity, 
   Plus, 
-  Search, 
   Filter, 
   Eye, 
-  Edit, 
-  Trash2,
   TrendingUp,
   AlertTriangle,
   Star,
@@ -23,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../lib/AuthContext';
 import { AdminLayout } from '../layouts/AdminLayout';
-import { dataService, Doctor, Patient, AppointmentData, Report, LabRecord } from '../services/dataService';
+import { dataService, Doctor, Patient, Report, LabRecord } from '../services/dataService';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 
 interface DashboardStats {
@@ -44,6 +40,28 @@ interface RecentActivity {
   message: string;
   time: string;
   status: 'success' | 'warning' | 'error';
+}
+
+interface DemographicsData {
+  totalPatients: number;
+  avgAge: number | null;
+  knownAgeCount: number;
+  genderCounts: {
+    male: number;
+    female: number;
+    other: number;
+    unknown: number;
+  };
+  ageGroups: {
+    children: number;
+    youngAdults: number;
+    adults: number;
+    seniors: number;
+    unknown: number;
+  };
+  bloodGroups: [string, number][];
+  topLocations: [string, number][];
+  uniqueBloodGroups: number;
 }
 
 export function AdminDashboard() {
@@ -68,10 +86,303 @@ export function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedReportForView, setSelectedReportForView] = useState<Report | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [patientSearchTerm, setPatientSearchTerm] = useState('');
 
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
+
+  const activityIconConfig = {
+    appointment: { icon: Calendar, color: 'text-blue-600', bg: 'bg-blue-50' },
+    registration: { icon: UserCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    complaint: { icon: AlertTriangle, color: 'text-amber-600', bg: 'bg-amber-50' },
+    approval: { icon: Star, color: 'text-purple-600', bg: 'bg-purple-50' }
+  } as const;
+
+  const chartColors = {
+    female: '#ec4899',
+    male: '#3b82f6',
+    other: '#10b981',
+    unknown: '#9ca3af',
+    children: '#0ea5e9',
+    youngAdults: '#6366f1',
+    adults: '#8b5cf6',
+    seniors: '#f97316',
+    blood: ['#047857', '#0f766e', '#059669', '#10b981', '#34d399']
+  };
+
+  const calculateAge = useCallback((patient: Patient) => {
+    if (typeof patient.age === 'number' && !Number.isNaN(patient.age)) {
+      return patient.age;
+    }
+    if (patient.dateOfBirth) {
+      const dob = new Date(patient.dateOfBirth);
+      if (!Number.isNaN(dob.getTime())) {
+        const diffMs = Date.now() - dob.getTime();
+        const ageDate = new Date(diffMs);
+        return Math.abs(ageDate.getUTCFullYear() - 1970);
+      }
+    }
+    return null;
+  }, []);
+
+  const demographics = useMemo<DemographicsData>(() => {
+    const genderCounts = { male: 0, female: 0, other: 0, unknown: 0 };
+    const ageGroups = { children: 0, youngAdults: 0, adults: 0, seniors: 0, unknown: 0 };
+    const bloodGroupCounts: Record<string, number> = {};
+    const locationCounts: Record<string, number> = {};
+
+    let ageSum = 0;
+    let ageCount = 0;
+
+    const normalizeGender = (value?: string) => {
+      if (!value) return 'unknown';
+      const normalized = value.toLowerCase().trim();
+      if (['male', 'm'].includes(normalized)) return 'male';
+      if (['female', 'f'].includes(normalized)) return 'female';
+      if (['non-binary', 'nonbinary', 'nb', 'other'].includes(normalized)) return 'other';
+      return 'unknown';
+    };
+
+    patients.forEach((patient) => {
+      const genderKey = normalizeGender(patient.gender);
+      genderCounts[genderKey as keyof typeof genderCounts] += 1;
+
+      const age = calculateAge(patient);
+      if (typeof age === 'number') {
+        ageSum += age;
+        ageCount += 1;
+        if (age < 18) ageGroups.children += 1;
+        else if (age < 36) ageGroups.youngAdults += 1;
+        else if (age < 56) ageGroups.adults += 1;
+        else ageGroups.seniors += 1;
+      } else {
+        ageGroups.unknown += 1;
+      }
+
+      const bloodGroup = (patient.bloodGroup || 'Unknown').toUpperCase();
+      bloodGroupCounts[bloodGroup] = (bloodGroupCounts[bloodGroup] || 0) + 1;
+
+      const location = patient.address?.split(',')[0]?.trim();
+      const locationKey = location && location.length > 0 ? location : 'Unknown';
+      locationCounts[locationKey] = (locationCounts[locationKey] || 0) + 1;
+    });
+
+    const bloodGroups = Object.entries(bloodGroupCounts).sort((a, b) => b[1] - a[1]);
+    const topLocations = Object.entries(locationCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+    return {
+      totalPatients: patients.length,
+      avgAge: ageCount ? ageSum / ageCount : null,
+      knownAgeCount: ageCount,
+      genderCounts,
+      ageGroups,
+      bloodGroups,
+      topLocations,
+      uniqueBloodGroups: bloodGroups.length,
+    };
+  }, [patients, calculateAge]);
+
+  const AgeDistributionBarChart = () => {
+    const categories = [
+      { key: 'children', label: 'Children', subLabel: '< 18 yrs', color: chartColors.children },
+      { key: 'youngAdults', label: 'Young Adults', subLabel: '18 - 35 yrs', color: chartColors.youngAdults },
+      { key: 'adults', label: 'Adults', subLabel: '36 - 55 yrs', color: chartColors.adults },
+      { key: 'seniors', label: 'Seniors', subLabel: '56+ yrs', color: chartColors.seniors },
+      { key: 'unknown', label: 'Unknown', subLabel: 'Missing data', color: chartColors.unknown }
+    ] as const;
+
+    const counts = categories.map(({ key }) => demographics.ageGroups[key]);
+    const maxValue = Math.max(...counts, 1);
+
+    return (
+      <div className="flex items-end justify-between gap-3 h-56">
+        {categories.map(({ key, label, subLabel, color }) => {
+          const count = demographics.ageGroups[key];
+          const height = maxValue ? (count / maxValue) * 100 : 0;
+          const percentage = demographics.totalPatients
+            ? Math.round((count / demographics.totalPatients) * 100)
+            : 0;
+
+          return (
+            <div key={key} className="flex-1 flex flex-col items-center space-y-3">
+              <div className="w-full bg-gray-100 rounded-xl h-44 flex items-end">
+                <div
+                  className="w-full rounded-xl"
+                  style={{
+                    height: `${height}%`,
+                    background: `linear-gradient(180deg, ${color}aa, ${color})`
+                  }}
+                ></div>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-semibold text-gray-800">{label}</p>
+                <p className="text-xs text-gray-500">{subLabel}</p>
+                <p className="text-xs text-gray-600 mt-1">{count} pts • {percentage}%</p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const handleViewReport = (report: Report) => {
+    setSelectedReportForView(report);
+    setIsReportModalOpen(true);
+  };
+
+  const closeReportModal = () => {
+    setIsReportModalOpen(false);
+    setSelectedReportForView(null);
+  };
+
+  const RecentActivityList = () => (
+    <div className="space-y-4">
+      {recentActivities.length > 0 ? (
+        recentActivities.map((activity) => {
+          const config = activityIconConfig[activity.type];
+          const StatusIndicator = () => {
+            const statusClasses = {
+              success: 'bg-green-100 text-green-700',
+              warning: 'bg-yellow-100 text-yellow-700',
+              error: 'bg-red-100 text-red-700'
+            } as const;
+            const labelMap = {
+              success: 'Success',
+              warning: 'Pending',
+              error: 'Attention'
+            } as const;
+            return (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusClasses[activity.status]}`}>
+                {labelMap[activity.status]}
+              </span>
+            );
+          };
+
+          const Icon = config?.icon || Calendar;
+
+          return (
+            <div key={activity.id} className="flex items-center space-x-4">
+              <div className="flex flex-col items-center">
+                <div className={`p-2 rounded-full ${config?.bg || 'bg-gray-100'}`}>
+                  <Icon className={`h-4 w-4 ${config?.color || 'text-gray-600'}`} />
+                </div>
+                <div className="h-full w-px bg-gray-200 mt-2" />
+              </div>
+              <div className="flex-1 bg-white border border-gray-100 rounded-xl shadow-sm p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <StatusIndicator />
+                  <span className="text-xs text-gray-500">{activity.time}</span>
+                </div>
+                <p className="text-sm font-medium text-gray-900">{activity.message}</p>
+                <p className="text-xs text-gray-500 mt-1">Activity ID: {activity.id}</p>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <div className="text-center py-8 text-gray-500">
+          <p>No recent activities found.</p>
+          <p className="text-xs mt-1">Activities from the last 7 days will appear here.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const GenderPieChart = () => {
+    const segments = [
+      { label: 'Female', value: demographics.genderCounts.female, color: chartColors.female },
+      { label: 'Male', value: demographics.genderCounts.male, color: chartColors.male },
+      { label: 'Other', value: demographics.genderCounts.other, color: chartColors.other },
+      { label: 'Unspecified', value: demographics.genderCounts.unknown, color: chartColors.unknown }
+    ];
+
+    const total = segments.reduce((sum, seg) => sum + seg.value, 0) || 1;
+    let cumulative = 0;
+    const gradientStops = segments
+      .filter(seg => seg.value > 0)
+      .map(seg => {
+        const start = (cumulative / total) * 100;
+        cumulative += seg.value;
+        const end = (cumulative / total) * 100;
+        return `${seg.color} ${start}% ${end}%`;
+      })
+      .join(', ');
+
+    const pieStyle = {
+      background: gradientStops ? `conic-gradient(${gradientStops})` : '#e5e7eb'
+    };
+
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="flex items-center justify-center">
+          <div className="relative w-52 h-52">
+            <div className="w-full h-full rounded-full shadow-inner" style={pieStyle}></div>
+            <div className="absolute inset-6 bg-white rounded-full flex flex-col items-center justify-center">
+              <p className="text-xs text-gray-500">Documented</p>
+              <p className="text-xl font-semibold text-gray-900">{total}</p>
+              <p className="text-xs text-gray-400">patients</p>
+            </div>
+          </div>
+        </div>
+        <div className="space-y-3">
+          {segments.map(({ label, value, color }) => {
+            const percent = demographics.totalPatients
+              ? Math.round((value / demographics.totalPatients) * 100)
+              : 0;
+            return (
+              <div key={label} className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: color }}></span>
+                  <span className="text-sm font-medium text-gray-800">{label}</span>
+                </div>
+                <div className="text-sm text-gray-600">
+                  {value} pts • {percent}%
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const BloodGroupBarChart = () => {
+    const groups = demographics.bloodGroups.slice(0, 6);
+    const maxValue = Math.max(...groups.map(([, count]) => count), 1);
+
+    return (
+      <div className="space-y-4">
+        {groups.length ? (
+          groups.map(([group, count], index) => {
+            const width = maxValue ? (count / maxValue) * 100 : 0;
+            const percent = demographics.totalPatients
+              ? Math.round((count / demographics.totalPatients) * 100)
+              : 0;
+            const color = chartColors.blood[index % chartColors.blood.length];
+            return (
+              <div key={group}>
+                <div className="flex justify-between text-sm font-medium text-gray-700">
+                  <span>{group}</span>
+                  <span>{count} pts • {percent}%</span>
+                </div>
+                <div className="h-3 bg-gray-100 rounded-full mt-2">
+                  <div
+                    className="h-3 rounded-full"
+                    style={{ width: `${width}%`, background: `linear-gradient(90deg, ${color}bb, ${color})` }}
+                  ></div>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <p className="text-sm text-gray-500">No blood group data available yet.</p>
+        )}
+      </div>
+    );
+  };
 
   // Generate recent activities from real data
   const generateRecentActivities = (doctorsData: Doctor[], patientsData: Patient[], appointmentsData: any[]) => {
@@ -318,29 +629,15 @@ export function AdminDashboard() {
       </div>
 
       {/* Recent Activities */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activities</h3>
-        <div className="space-y-4">
-          {recentActivities.length > 0 ? (
-            recentActivities.map((activity) => (
-              <div key={activity.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                <div className={`w-3 h-3 rounded-full ${
-                  activity.status === 'success' ? 'bg-green-500' :
-                  activity.status === 'warning' ? 'bg-yellow-500' : 'bg-red-500'
-                }`}></div>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-900">{activity.message}</p>
-                  <p className="text-xs text-gray-500">{activity.time}</p>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-center py-8 text-gray-500">
-              <p>No recent activities found.</p>
-              <p className="text-xs mt-1">Activities from the last 7 days will appear here.</p>
-            </div>
-          )}
+      <div className="bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Recent Activities</h3>
+            <p className="text-sm text-gray-500">Latest doctor, patient, and appointment updates</p>
+          </div>
+          <span className="text-xs text-gray-400">Auto-refresh every 30s</span>
         </div>
+        <RecentActivityList />
       </div>
     </div>
   );
@@ -703,9 +1000,132 @@ export function AdminDashboard() {
           </div>
         )}
         {activeTab === 'demographics' && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold mb-4">Patient Demographics</h2>
-            <p className="text-gray-600">Demographics analytics coming soon...</p>
+          <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Patient Demographics</h2>
+                <p className="text-gray-600">Understand the makeup of your patient population</p>
+              </div>
+              <div className="text-sm text-gray-500">
+                Updated in real-time from patient records
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <p className="text-sm font-medium text-gray-600">Total Patients</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{demographics.totalPatients}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {demographics.totalPatients > 0 ? 'Includes all registered patients' : 'Awaiting patient registrations'}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <p className="text-sm font-medium text-gray-600">Average Age</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {demographics.avgAge ? `${Math.round(demographics.avgAge)} yrs` : 'N/A'}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Based on {demographics.knownAgeCount} patient records
+                </p>
+              </div>
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <p className="text-sm font-medium text-gray-600">Gender Ratio</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">
+                  {demographics.genderCounts.female}:{demographics.genderCounts.male}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Female • Male distribution
+                </p>
+              </div>
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <p className="text-sm font-medium text-gray-600">Blood Groups</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{demographics.uniqueBloodGroups}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Unique blood group profiles recorded
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Age Distribution</h3>
+                  <span className="text-xs text-gray-500">Scaled to max cohort</span>
+                </div>
+                <AgeDistributionBarChart />
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Gender Distribution</h3>
+                  <span className="text-xs text-gray-500">Live patient data</span>
+                </div>
+                <GenderPieChart />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Blood Group Mix</h3>
+                  <span className="text-xs text-gray-500">Top cohorts</span>
+                </div>
+                <BloodGroupBarChart />
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
+                  <MapPin className="h-4 w-4 text-purple-600" />
+                  <span>Top Locations</span>
+                </h3>
+                <div className="space-y-3">
+                  {demographics.topLocations.length ? (
+                    demographics.topLocations.map(([location, count]) => {
+                      const percentage = demographics.totalPatients
+                        ? Math.round((count / demographics.totalPatients) * 100)
+                        : 0;
+                      return (
+                        <div key={location} className="flex items-center justify-between text-sm">
+                          <span className="text-gray-700">{location}</span>
+                          <span className="text-gray-900 font-medium">{count} ({percentage}%)</span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500">Patient location data will appear here.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Key Insights</h3>
+                <ul className="space-y-3 text-sm text-gray-700">
+                  <li>
+                    Most common blood group: <span className="font-semibold">{demographics.bloodGroups[0]?.[0] || 'N/A'}</span>
+                  </li>
+                  <li>
+                    Largest patient cluster: <span className="font-semibold">{demographics.topLocations[0]?.[0] || 'N/A'}</span>
+                  </li>
+                  <li>
+                    Youngest segment: <span className="font-semibold">{(() => {
+                      const entries = Object.entries(demographics.ageGroups) as [keyof DemographicsData['ageGroups'], number][];
+                      const sorted = entries.sort((a, b) => b[1] - a[1]);
+                      const keyMap: Record<string, string> = {
+                        children: 'Children',
+                        youngAdults: 'Young Adults',
+                        adults: 'Adults',
+                        seniors: 'Seniors',
+                        unknown: 'Unknown',
+                      };
+                      return keyMap[sorted[0]?.[0] || 'unknown'];
+                    })()}</span>
+                  </li>
+                  <li>
+                    Documented age data for <span className="font-semibold">{demographics.knownAgeCount}</span> patients
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         )}
         {activeTab === 'records' && (
@@ -754,7 +1174,10 @@ export function AdminDashboard() {
                             {new Date(report.createdAt).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button className="text-blue-600 hover:text-blue-900 mr-3 flex items-center">
+                            <button
+                              onClick={() => handleViewReport(report)}
+                              className="text-blue-600 hover:text-blue-900 mr-3 flex items-center"
+                            >
                               <Eye className="h-4 w-4 mr-1" />
                               View
                             </button>
@@ -1126,6 +1549,78 @@ export function AdminDashboard() {
           </div>
         )}
       </div>
+      {isReportModalOpen && selectedReportForView && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4">
+            <div className="flex items-center justify-between border-b px-6 py-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-purple-600 font-semibold">Report Details</p>
+                <h3 className="text-2xl font-bold text-gray-900">{selectedReportForView.title || 'Medical Report'}</h3>
+              </div>
+              <button onClick={closeReportModal} className="p-2 rounded-full hover:bg-gray-100">
+                <X className="h-5 w-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-2 gap-4 border-b">
+              <div>
+                <p className="text-xs text-gray-500 uppercase">Patient</p>
+                <p className="text-lg font-semibold text-gray-900">{selectedReportForView.patientName}</p>
+                <p className="text-sm text-gray-500 mt-1">Patient ID: {selectedReportForView.patientId}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase">Doctor</p>
+                <p className="text-lg font-semibold text-gray-900">{selectedReportForView.doctorName}</p>
+                <p className="text-sm text-gray-500 mt-1">Doctor ID: {selectedReportForView.doctorId}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase">Appointment</p>
+                <p className="text-sm text-gray-700">{selectedReportForView.appointmentId}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase">Generated On</p>
+                <p className="text-sm text-gray-700">{new Date(selectedReportForView.createdAt).toLocaleString()}</p>
+              </div>
+            </div>
+
+            <div className="px-6 py-6 space-y-6 max-h-[60vh] overflow-y-auto">
+              <div>
+                <p className="text-xs text-gray-500 uppercase mb-1">Diagnosis</p>
+                <p className="text-gray-800 leading-relaxed">{selectedReportForView.diagnosis || 'Not provided'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase mb-1">Prescription</p>
+                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{selectedReportForView.prescription || 'Not provided'}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase mb-1">Recommendations</p>
+                <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{selectedReportForView.recommendations || 'Not provided'}</p>
+              </div>
+              {selectedReportForView.notes && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase mb-1">Additional Notes</p>
+                  <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{selectedReportForView.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-3 border-t px-6 py-4 bg-gray-50 rounded-b-2xl">
+              <button
+                onClick={closeReportModal}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-white"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                Print / Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   );
 }
